@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import io, { Socket } from 'socket.io-client';
+import io from 'socket.io-client';
+import { WebRTCServer } from '@/lib/web_rtc_server';
 
 interface Message {
   text: string;
@@ -12,89 +13,36 @@ export default function Home() {
   const [inputMessage, setInputMessage] = useState<string>('');
   const [connectionStatus, setConnectionStatus] = useState<'Connected' | 'Disconnected'>('Disconnected');
 
-  const peerConnection = useRef<RTCPeerConnection | null>(null);
-  const dataChannel = useRef<RTCDataChannel | null>(null);
-  const socketRef = useRef<Socket | null>(null);
+  const webRTCServerRef = useRef<WebRTCServer | null>(null);
 
   useEffect(() => {
-    socketRef.current = io('http://localhost:3000');
-    setupWebRTC();
+    const socket = io('http://localhost:3000');
+    webRTCServerRef.current = new WebRTCServer(socket);
+
+    webRTCServerRef.current.setOnMessageCallback((message: Message) => {
+      setMessages(prev => [...prev, message]);
+    });
+
+    webRTCServerRef.current.setOnStatusChangeCallback((status: 'Connected' | 'Disconnected') => {
+      setConnectionStatus(status);
+    });
 
     return () => {
-      if (peerConnection.current) {
-        peerConnection.current.close();
-      }
-      if (socketRef.current) {
-        socketRef.current.disconnect();
+      if (webRTCServerRef.current) {
+        webRTCServerRef.current.close();
       }
     };
   }, []);
 
-  const setupWebRTC = () => {
-    peerConnection.current = new RTCPeerConnection();
-
-    peerConnection.current.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
-      if (event.candidate && socketRef.current) {
-        socketRef.current.emit('ice-candidate', event.candidate);
-      }
-    };
-
-    peerConnection.current.ondatachannel = (event: RTCDataChannelEvent) => {
-      dataChannel.current = event.channel;
-      setupDataChannel();
-    };
-
-    if (socketRef.current) {
-      socketRef.current.on('offer', async (offer: RTCSessionDescriptionInit) => {
-        if (peerConnection.current) {
-          await peerConnection.current.setRemoteDescription(new RTCSessionDescription(offer));
-          const answer = await peerConnection.current.createAnswer();
-          await peerConnection.current.setLocalDescription(answer);
-          socketRef.current?.emit('answer', answer);
-        }
-      });
-
-      socketRef.current.on('answer', (answer: RTCSessionDescriptionInit) => {
-        if (peerConnection.current) {
-          peerConnection.current.setRemoteDescription(new RTCSessionDescription(answer));
-        }
-      });
-
-      socketRef.current.on('ice-candidate', (candidate: RTCIceCandidateInit) => {
-        if (peerConnection.current) {
-          peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
-        }
-      });
-    }
-  };
-
-  const setupDataChannel = () => {
-    if (dataChannel.current) {
-      dataChannel.current.onopen = () => {
-        setConnectionStatus('Connected');
-      };
-
-      dataChannel.current.onmessage = (event: MessageEvent) => {
-        setMessages(prev => [...prev, { text: event.data, sender: 'Peer' }]);
-      };
-    }
-  };
-
   const createOffer = async () => {
-    if (peerConnection.current) {
-      dataChannel.current = peerConnection.current.createDataChannel('messageChannel');
-      setupDataChannel();
-
-      const offer = await peerConnection.current.createOffer();
-      await peerConnection.current.setLocalDescription(offer);
-      socketRef.current?.emit('offer', offer);
+    if (webRTCServerRef.current) {
+      await webRTCServerRef.current.createOffer();
     }
   };
 
   const sendMessage = () => {
-    if (inputMessage && dataChannel.current?.readyState === 'open') {
-      dataChannel.current.send(inputMessage);
-      setMessages(prev => [...prev, { text: inputMessage, sender: 'You' }]);
+    if (inputMessage && webRTCServerRef.current) {
+      webRTCServerRef.current.sendMessage(inputMessage);
       setInputMessage('');
     }
   };
