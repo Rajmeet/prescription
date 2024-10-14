@@ -1,59 +1,36 @@
-// const express = require("express");
-// const WebSocket = require("ws");
-// const app = express();
-// const port = 3000;
+const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
 
-// // WEBSOCKET STUFF BEGIN
-
-// const ws = new WebSocket("ws://www.localhost:3001");
-
-// ws.on("error", console.error);
-
-// ws.on("open", function open() {
-//   ws.send("something");
-// });
-
-// ws.on("message", function message(data) {
-//   console.log("received: %s", data);
-// });
-
-// // WEBSOCKET STUFF END
-
-// app.get("/getWebRTC", (req, res) => {
-//   res.send("This is the base endpoint");
-// });
-
-// app.listen(port, () => {
-//   console.log(`New user has connected`);
-// });
-
-var express = require("express");
-var app = express();
-var expressWs = require("express-ws")(app);
-
-app.use(function (req, res, next) {
-  console.log("middleware");
-  req.testing = "testing";
-  return next();
+const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
 });
 
-const ws = expressWs.getWss();
+io.on('connection', (socket) => {
+  console.log('A user connected');
 
-app.get("/", function (req, res, next) {
-  console.log("get route", req.testing);
-  res.send("This is being sent back");
-});
-
-app.ws("/", function (ws, req) {
-  ws.on("open", function open() {
-    console.log("A connection to the web socket has been made.");
-    ws.send("something");
+  socket.on('offer', (offer) => {
+    socket.broadcast.emit('offer', offer);
   });
-  ws.on("message", function (msg) {
-    console.log(msg);
-    ws.send("Receiving your connetcion!");
+
+  socket.on('answer', (answer) => {
+    socket.broadcast.emit('answer', answer);
   });
-  console.log("socket", req.testing);
+
+  socket.on('ice-candidate', (candidate) => {
+    socket.broadcast.emit('ice-candidate', candidate);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('A user disconnected');
+  });
 });
 
-app.listen(3000);
+server.listen(3000, () => {
+  console.log('Signaling server listening on port 3000');
+});
