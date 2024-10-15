@@ -49,7 +49,7 @@ export default function Home() {
 
   return (
     <div className="container mx-auto p-4 max-w-2xl">
-      <h1 className="text-3xl font-bold mb-4">WebRTC Messaging with Next.js and Tailwind</h1>
+      <h1 className="text-3xl font-bold mb-4">Prescription </h1>
       <p className="mb-4">Connection Status:
         <span className={`ml-2 px-2 py-1 rounded ${connectionStatus === 'Connected' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
           }`}>
@@ -84,6 +84,8 @@ export default function Home() {
         >
           Send
         </button>
+
+
       </div>
     </div>
   );
